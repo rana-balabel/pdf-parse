@@ -1,0 +1,11 @@
+{
+  "java.project.sourcePaths": ["src"],
+  "java.project.outputPath": "bin",
+  "java.project.referencedLibraries": [
+    "lib/**/*.jar",
+    "c:\\Users\\ranaa\\Downloads\\pdfbox-2.0.24.jar",
+    "c:\\Users\\ranaa\\Downloads\\commons-logging-1.2.jar",
+    "c:\\Users\\ranaa\\Downloads\\fontbox-3.0.0-RC1.jar",
+    "c:\\Users\\ranaa\\Downloads\\opencsv-5.7.1.jar"
+  ]
+}
