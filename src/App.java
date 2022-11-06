@@ -50,20 +50,23 @@ public class App {
             String[] header = { "Institution Name", "MICR", "Routing Numbers", "Address" };
             writer.writeNext(header);
             String[] oneRowofData = new String[4];
-            System.out.println(dataToInsert.get("row1").size());
-            int count = 0;
+            int columnNumber = 0;
             // add data to csv
+            // each object in the map is an Object partaining to the institution
+            // with a collection of all the addresses, MICRs, and routing numbers
+            // first loop deals with the major objects of the number of institutions
             for (int i = 1; i <= dataToInsert.size(); i++) {
-                count = 0;
+                // the datasets come in multiples of 4 (4 columns per row). loop through the
+                // major object to find the rows of data in multiples of 4 (4 columns per row)
                 for (int x = 0; x < (dataToInsert.get("row" + i).size() / 4); x++) {
-                    oneRowofData[0] = (dataToInsert.get("row" + i).get(count));
-                    count++;
-                    oneRowofData[1] = (dataToInsert.get("row" + i).get(count));
-                    count++;
-                    oneRowofData[2] = (dataToInsert.get("row" + i).get(count));
-                    count++;
-                    oneRowofData[3] = (dataToInsert.get("row" + i).get(count));
-                    count++;
+                    for (int count = 0; count < dataToInsert.get("row" + i).size(); count++) {
+                        oneRowofData[columnNumber] = (dataToInsert.get("row" + i).get(count));
+                        columnNumber++;
+                        if (columnNumber > 3) {
+                            columnNumber = 0;
+                        }
+
+                    }
                     writer.writeNext(oneRowofData);
                 }
                 System.out.println(" End of one row \n");
@@ -141,12 +144,6 @@ public class App {
             }
         }
 
-        // for (int k = 1; k <= finalMap.size(); k++) {
-        // System.out.println(finalMap.get("row" + k));
-        // System.out.println(" End of one row \n");
-        // }
-        // idea about looping through if its a multiple of 4 (4 data sets in each row..
-        // once it is a multiple of 4, insert row in CSV)
         return finalMap;
 
     }
@@ -172,8 +169,7 @@ public class App {
             lines[i] = lines[i].trim();
             linesLength = lines[i].length();
             if (linesLength > pageNumberasString.length() && linesLength > 19) { // makes sure we're not including a
-                                                                                 // page number as a line
-                // of data
+                                                                                 // page number as a line of data
                 numbersTemp = lines[i].substring(0, charactersToSeparate).trim();
                 addressesTemp = lines[i].substring(charactersToSeparate, linesLength).trim();
                 finalAddresses.add(addressesTemp);
@@ -182,8 +178,6 @@ public class App {
         }
 
         // to access individual string items, use .get(index)
-        // System.out.println(finalAddresses);
-        // System.out.println(separateNumbersFromAddress);
         Map<String, List<String>> map = new HashMap();
         map.put("addressSeparated", finalAddresses);
         map.put("numbersUnseparated", separateNumbersFromAddress);
