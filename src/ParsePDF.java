@@ -13,13 +13,16 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 
+import org.apache.commons.text.WordUtils;
+import org.apache.pdfbox.contentstream.operator.graphics.LegacyFillNonZeroRule;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.graphics.blend.SeparableBlendMode;
 import org.apache.pdfbox.text.PDFTextStripper;
-
 import com.opencsv.CSVWriter;
 
 import java.util.*;
-
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.lang.String;
 
 public class ParsePDF {
@@ -47,6 +50,12 @@ public class ParsePDF {
         // write the final data to a CSV already existing locally
         writeFinalDataToCSV("D:\\ApparaCSVs\\Test.csv", returnedCleanData);
 
+        // String[] post = separateAddresses(
+        // "Yonge & Harbour, 26 Downes Street, 26 Downes St. Toronto, ON M5E1W7,
+        // Toronto, ON M5E 1W7");
+        // for (int i = 0; i < post.length; i++) {
+        // System.out.println(post[i]);
+        // }
         // close the open pointers
         pdfDocument.close();
         fis.close();
@@ -67,9 +76,10 @@ public class ParsePDF {
             CSVWriter writer = new CSVWriter(outputfile);
 
             // adding header to csv
-            String[] header = { "Institution Name", "MICR", "Routing Numbers", "Address" };
+            String[] header = { "Institution Name", "MICR", "Routing Numbers", "Address", "Unit", "Street", "City",
+                    "Province", "Postal Code" };
             writer.writeNext(header);
-            String[] oneRowofData = new String[4];
+            String[] oneRowofData = new String[9];
             // variable to track where we are in the current data object (first index,
             // second, etc)
             int indexNumber = 0;
@@ -79,12 +89,12 @@ public class ParsePDF {
             for (int i = 1; i <= dataToInsert.size(); i++) {
                 indexNumber = 0; // reset the index of where we're at within the object at the start of every new
                                  // bank collection
-                // the datasets come in multiples of 4 (4 columns per row). loop through the
-                // number of rows to insert by dividing number of data by 4
-                for (int x = 0; x < (dataToInsert.get("row" + i).size() / 4); x++) {
+                // the datasets come in multiples of 9 (9 columns per row). loop through the
+                // number of rows to insert by dividing number of data by 9
+                for (int x = 0; x < (dataToInsert.get("row" + i).size() / 9); x++) {
                     // populate the oneRowofData 4 indices with the indices in the map. traverse
                     // through the entire object until the number of rows is complete
-                    for (int rowNumber = 0; rowNumber < 4; rowNumber++) {
+                    for (int rowNumber = 0; rowNumber < 9; rowNumber++) {
                         oneRowofData[rowNumber] = dataToInsert.get("row" + i).get(indexNumber);
                         indexNumber++;
                     }
@@ -154,6 +164,14 @@ public class ParsePDF {
                         rowOfData.add(findMICRandRoutingNumbers(
                                 addressAndNumbersSeparated.get("numbersUnseparated").get(x))[1]);
                         rowOfData.add(addressAndNumbersSeparated.get("addressSeparated").get(x));
+                        rowOfData.add(separateAddresses(addressAndNumbersSeparated.get("addressSeparated").get(x))[0]); // suite
+                                                                                                                        // number
+                        rowOfData.add(separateAddresses(addressAndNumbersSeparated.get("addressSeparated").get(x))[1]); // street
+                                                                                                                        // address
+                        rowOfData.add(separateAddresses(addressAndNumbersSeparated.get("addressSeparated").get(x))[2]); // city
+                        rowOfData.add(separateAddresses(addressAndNumbersSeparated.get("addressSeparated").get(x))[3]); // province
+                        rowOfData.add(separateAddresses(addressAndNumbersSeparated.get("addressSeparated").get(x))[4]); // postal
+                                                                                                                        // code
                     }
                     finalMap.put("row" + i, rowOfData);
                     rowOfData = new ArrayList<>(); // reset arraylist after insertion
@@ -163,6 +181,94 @@ public class ParsePDF {
 
         return finalMap;
 
+    }
+
+    public static int[] regExIndex(String pattern, String text, Integer fromIndex) {
+        Matcher matcher = Pattern.compile(pattern).matcher(text);
+        if ((fromIndex != null && matcher.find(fromIndex)) || matcher.find()) {
+            return new int[] { matcher.start(), matcher.end() };
+        }
+
+        System.out.println(text);
+        return new int[] { -1, -1 };
+    }
+
+    public static String[] separateAddresses(String unsepAddress) {
+
+        // convert address first to sentence case:
+        final char[] delimeters = { ' ', '-' };
+        unsepAddress = WordUtils.capitalizeFully(unsepAddress, delimeters);
+
+        // in the form of { unit, street, city, province, postal code}
+        String[] finalParsedAddress = new String[5];
+        for (int k = 0; k < 5; k++) {
+            finalParsedAddress[k] = ""; // initial values
+        }
+        // separate by comma everything except the last 10 characters because we know
+        // those are the province and postal code for all cases
+        if (unsepAddress.length() > 10) {
+            String[] splitByComma = unsepAddress.substring(0, unsepAddress.length() - 10).split("\\s*,\\s*");
+            String provinceAndPostal = unsepAddress.substring(unsepAddress.length() - 10);
+            String[] separated = provinceAndPostal.split("\s");
+            // the two part postal code
+            if (separated.length > 1) {
+                if (separated.length >= 3) {
+                    finalParsedAddress[4] = separated[1].toUpperCase() + ' ' + separated[2].toUpperCase();
+                } else {
+                    finalParsedAddress[4] = separated[1].toUpperCase(); // to catch cases where the line has no postal
+                                                                        // code
+                }
+            }
+            finalParsedAddress[3] = separated[0].toUpperCase();
+
+            // initial boolean vals
+            boolean isSuite = false;
+            boolean isCity = false;
+
+            // once all arrays return correctly, pass the addressSep into this function to
+            // return, pass to CSV function to write into columns
+            for (int x = 0; x < splitByComma.length; x++) {
+                if (splitByComma[x].contains("Suite") || splitByComma[x].contains("Unit")) {
+                    String[] streetTemp = splitByComma[x].split("Suite|Unit");
+                    if (streetTemp.length > 1) {
+                        int[] startEndIndex = regExIndex(
+                                "[a-zA-Z]-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}|[0-9][a-zA-Z]|[a-zA-Z]|[0-9]{1,4}",
+                                streetTemp[1], 0);// find location of
+                        // suite number
+                        finalParsedAddress[0] = "Unit " + streetTemp[1].substring(startEndIndex[0], startEndIndex[1]);
+                        if (streetTemp[0] == "") {
+                            finalParsedAddress[1] += streetTemp[1].substring(startEndIndex[1], streetTemp[1].length())
+                                    + ", ";
+                        } else {
+                            finalParsedAddress[1] += streetTemp[0] + ", ";
+                        }
+                        isSuite = true;
+                    }
+                    isSuite = false;
+                } else {
+                    isSuite = false;
+                }
+                if (x == splitByComma.length - 1) // last index is city
+                {
+                    finalParsedAddress[2] = splitByComma[x];
+                    isCity = true;
+                } else {
+                    isCity = false;
+                }
+                // if all else fails, then it is a street
+                if (!isCity && !isSuite) {
+                    finalParsedAddress[1] += splitByComma[x] + ", ";
+                    // remove tail comma from street
+                    finalParsedAddress[1] = finalParsedAddress[1].substring(0, finalParsedAddress[1].length() - 2);
+                }
+
+                isCity = false;
+                isSuite = false;
+            }
+        } else {
+            finalParsedAddress[2] = unsepAddress;
+        }
+        return finalParsedAddress;
     }
 
     public static String[] findMICRandRoutingNumbers(String unsepNumber) {
@@ -202,6 +308,11 @@ public class ParsePDF {
                     }
                     lines[i + 1] = "";
                     linesLength = lines[i].length(); // update line length
+                }
+
+                if (lines[i].contains("(Sub to")) {
+                    lines[i] = lines[i].substring(0, lines[i].lastIndexOf("(Sub"));
+                    linesLength = lines[i].length();
                 }
                 numbersTemp = lines[i].substring(0, charactersToSeparate).trim();
                 addressesTemp = lines[i].substring(charactersToSeparate, linesLength).trim();
