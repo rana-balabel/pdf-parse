@@ -14,11 +14,10 @@ import java.io.FileWriter;
 import java.io.IOException;
 
 import org.apache.commons.text.WordUtils;
-import org.apache.pdfbox.contentstream.operator.graphics.LegacyFillNonZeroRule;
 import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.graphics.blend.SeparableBlendMode;
 import org.apache.pdfbox.text.PDFTextStripper;
 import com.opencsv.CSVWriter;
+import com.opencsv.bean.RegexToBeanField;
 
 import java.util.*;
 import java.util.regex.Matcher;
@@ -40,21 +39,22 @@ public class ParsePDF {
         String docText = pdfTextStripper.getText(pdfDocument);
 
         Map<String, List<String>> returnedCleanData = new HashMap();
-        // function will return a map containing several List<String> objects
-        // each object is a collection of the SAME insitution, with its rows of data to
-        // insert in the form of:
-        // { NAME, MICR, ROUTING NUMBER, ADDRESS, NAME, MICR, ROUTING NUMBER, ADDRESS}
-        // for however many lines of data there are
+        // // function will return a map containing several List<String> objects
+        // // each object is a collection of the SAME insitution, with its rows of data
+        // to
+        // // insert in the form of:
+        // // { NAME, MICR, ROUTING NUMBER, ADDRESS, NAME, MICR, ROUTING NUMBER,
+        // ADDRESS}
+        // // for however many lines of data there are
         returnedCleanData = separateBanks(docText, pdfPageNumber);
 
-        // write the final data to a CSV already existing locally
+        // // write the final data to a CSV already existing locally
         writeFinalDataToCSV("D:\\ApparaCSVs\\Test.csv", returnedCleanData);
 
-        // String[] post = separateAddresses(
-        // "Yonge & Harbour, 26 Downes Street, 26 Downes St. Toronto, ON M5E1W7,
-        // Toronto, ON M5E 1W7");
-        // for (int i = 0; i < post.length; i++) {
-        // System.out.println(post[i]);
+        // String[] address = separateAddresses(
+        // "Chateauguay, 129, boul. d'Anjou, Chateauguay");
+        // for (int i = 0; i < address.length; i++) {
+        // System.out.println(address[i]);
         // }
         // close the open pointers
         pdfDocument.close();
@@ -189,8 +189,32 @@ public class ParsePDF {
             return new int[] { matcher.start(), matcher.end() };
         }
 
-        System.out.println(text);
+        // System.out.println(text);
         return new int[] { -1, -1 };
+    }
+
+    public static boolean addressContainsPostalCode(String lastTenChars) {
+        int[] contains = regExIndex("[a-zA-Z][0-9]{1}[a-zA-Z]\s[0-9]{1}[a-zA-Z][0-9]{1}", lastTenChars, 0);
+        if (contains[0] != -1)
+            return true;
+        else
+            return false;
+    }
+
+    public static boolean lastCharsAreProvince(String lastTwoChars) {
+        int[] contains = regExIndex("\s*[a-zA-Z][a-zA-Z]\s*", lastTwoChars, 0);
+        if (contains[0] != -1)
+            return true;
+        else
+            return false;
+    }
+
+    public static boolean addressContainPartPostalCode(String lastTenChars) {
+        int[] contains = regExIndex("[a-zA-Z][0-9]{1}[a-zA-Z]", lastTenChars, 0);
+        if (contains[0] != -1)
+            return true;
+        else
+            return false;
     }
 
     public static String[] separateAddresses(String unsepAddress) {
@@ -204,69 +228,94 @@ public class ParsePDF {
         for (int k = 0; k < 5; k++) {
             finalParsedAddress[k] = ""; // initial values
         }
-        // separate by comma everything except the last 10 characters because we know
-        // those are the province and postal code for all cases
-        if (unsepAddress.length() > 10) {
-            String[] splitByComma = unsepAddress.substring(0, unsepAddress.length() - 10).split("\\s*,\\s*");
-            String provinceAndPostal = unsepAddress.substring(unsepAddress.length() - 10);
-            String[] separated = provinceAndPostal.split("\s");
-            // the two part postal code
-            if (separated.length > 1) {
-                if (separated.length >= 3) {
-                    finalParsedAddress[4] = separated[1].toUpperCase() + ' ' + separated[2].toUpperCase();
-                } else {
-                    finalParsedAddress[4] = separated[1].toUpperCase(); // to catch cases where the line has no postal
-                                                                        // code
-                }
-            }
-            finalParsedAddress[3] = separated[0].toUpperCase();
-
-            // initial boolean vals
-            boolean isSuite = false;
-            boolean isCity = false;
-
-            // once all arrays return correctly, pass the addressSep into this function to
-            // return, pass to CSV function to write into columns
-            for (int x = 0; x < splitByComma.length; x++) {
-                if (splitByComma[x].contains("Suite") || splitByComma[x].contains("Unit")) {
-                    String[] streetTemp = splitByComma[x].split("Suite|Unit");
-                    if (streetTemp.length > 1) {
-                        int[] startEndIndex = regExIndex(
-                                "[a-zA-Z]-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}|[0-9][a-zA-Z]|[a-zA-Z]|[0-9]{1,4}",
-                                streetTemp[1], 0);// find location of
-                        // suite number
-                        finalParsedAddress[0] = "Unit " + streetTemp[1].substring(startEndIndex[0], startEndIndex[1]);
-                        if (streetTemp[0] == "") {
-                            finalParsedAddress[1] += streetTemp[1].substring(startEndIndex[1], streetTemp[1].length())
-                                    + ", ";
-                        } else {
-                            finalParsedAddress[1] += streetTemp[0] + ", ";
-                        }
-                        isSuite = true;
+        if (addressContainsPostalCode(unsepAddress.substring(unsepAddress.length() - 10))) {
+            // separate by comma everything except the last 10 characters because we know
+            // those are the province and postal code
+            if (unsepAddress.length() > 10) {
+                String[] splitByComma = unsepAddress.substring(0, unsepAddress.length() - 10).split("\\s*,\\s*");
+                String provinceAndPostal = unsepAddress.substring(unsepAddress.length() - 10);
+                String[] separated = provinceAndPostal.split("\s");
+                // the two part postal code
+                if (separated.length > 1) {
+                    if (separated.length >= 3) {
+                        finalParsedAddress[4] = separated[1].toUpperCase() + ' ' + separated[2].toUpperCase();
+                    } else {
+                        finalParsedAddress[4] = separated[1].toUpperCase(); // to catch cases where the line has no
+                                                                            // postal
+                                                                            // code
                     }
-                    isSuite = false;
-                } else {
-                    isSuite = false;
                 }
-                if (x == splitByComma.length - 1) // last index is city
-                {
-                    finalParsedAddress[2] = splitByComma[x];
-                    isCity = true;
-                } else {
-                    isCity = false;
-                }
-                // if all else fails, then it is a street
-                if (!isCity && !isSuite) {
-                    finalParsedAddress[1] += splitByComma[x] + ", ";
-                    // remove tail comma from street
-                    finalParsedAddress[1] = finalParsedAddress[1].substring(0, finalParsedAddress[1].length() - 2);
-                }
+                finalParsedAddress[3] = separated[0].toUpperCase();
 
-                isCity = false;
-                isSuite = false;
+                // initial boolean vals
+                boolean isSuite = false;
+                boolean isCity = false;
+
+                // once all arrays return correctly, pass the addressSep into this function to
+                // return, pass to CSV function to write into columns
+                for (int x = 0; x < splitByComma.length; x++) {
+                    if (splitByComma[x].contains("Suite")) {
+                        String[] streetTemp = splitByComma[x].split("Suite");
+                        if (streetTemp.length > 1) {
+                            int[] startEndIndex = regExIndex(
+                                    "[0-9]{1,4}\s*&\s*[0-9]{1,4}|[0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}[a-zA-Z]|[a-zA-Z][a-zA-Z]-[0-9]{1,4}|[a-zA-Z][a-zA-Z][0-9]{1,4}|[a-zA-Z]-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}|[0-9][a-zA-Z]|[a-zA-Z]|[0-9]{1,4}",
+                                    streetTemp[1], 0);// find location of
+                            // suite number
+                            finalParsedAddress[0] = "Suite "
+                                    + streetTemp[1].substring(startEndIndex[0], startEndIndex[1]).toUpperCase();
+                            if (streetTemp[0] == "") {
+                                finalParsedAddress[1] += streetTemp[1].substring(startEndIndex[1],
+                                        streetTemp[1].length())
+                                        + ", ";
+                            } else {
+                                finalParsedAddress[1] += streetTemp[0] + ", ";
+                            }
+                            isSuite = true;
+                        }
+                    } else {
+                        isSuite = false;
+                    }
+                    if (x == splitByComma.length - 1) // last index is city
+                    {
+                        finalParsedAddress[2] = splitByComma[x];
+                        isCity = true;
+                    } else {
+                        isCity = false;
+                    }
+                    // if all else fails, then it is a street
+                    if (!isCity && !isSuite) {
+                        finalParsedAddress[1] += splitByComma[x] + ", ";
+                        // remove tail comma from street
+                    }
+
+                    isCity = false;
+                    isSuite = false;
+                }
+                if (finalParsedAddress[1].length() > 2) {
+                    finalParsedAddress[1] = finalParsedAddress[1].substring(0,
+                            finalParsedAddress[1].length() - 2);
+                }
+            } else {
+                finalParsedAddress[2] = unsepAddress; // address is less than 10 characters. assume it to be just the
+                                                      // city
             }
-        } else {
-            finalParsedAddress[2] = unsepAddress;
+        } else { // line does not contain a postal code
+            String[] findRemainingData = unsepAddress.split("\\s*,\\s*");
+            for (int j = 0; j < findRemainingData.length; j++) {
+                // last index is province
+                if (j == findRemainingData.length - 1) {
+                    finalParsedAddress[3] = findRemainingData[j].toUpperCase();
+                } else if (j == findRemainingData.length - 2) // second last index is city
+                {
+                    finalParsedAddress[2] = findRemainingData[j];
+                } else { // remaining is the street
+                    finalParsedAddress[1] += findRemainingData[j] + ", ";
+                }
+            }
+            if (finalParsedAddress[1].length() > 2) { // remove tail comma
+                finalParsedAddress[1] = finalParsedAddress[1].substring(0,
+                        finalParsedAddress[1].length() - 2);
+            }
         }
         return finalParsedAddress;
     }
@@ -284,9 +333,7 @@ public class ParsePDF {
         // step1: separate each string into multiple lines:
         information = information.trim();
         String[] lines = information.split(System.lineSeparator());
-        String[] specialCases = {
-                "000308561 08561-003", "000304453 04453-003", "000304136 04136-003", "000102279 02279-001",
-                "000108892 08892-001", "000108930 08930-001", "000116626 16626-001", "001007292 07292-010" };
+
         int charactersToSeparate = 19;
         int linesLength = 0;
         List<String> finalAddresses = new ArrayList<String>();
@@ -298,22 +345,33 @@ public class ParsePDF {
         for (int i = 0; i < lines.length; i++) {
             lines[i] = lines[i].trim();
             linesLength = lines[i].length();
+
             if (linesLength > pageNumberasString.length() && linesLength > 19) { // makes sure we're not including a
-                                                                                 // page number as a line of data
-                if (stringContainsItemFromList(lines[i], specialCases)) {
-                    if (lines[i].lastIndexOf("-") == linesLength - 1) {
-                        lines[i] = lines[i] + "" + lines[i + 1];
-                    } else {
-                        lines[i] = lines[i] + ", " + lines[i + 1];
-                    }
+                // page number as a line of data
+                if (!addressContainsPostalCode(lines[i].substring(lines[i].length() - 10)) && (i != lines.length - 1)
+                        && lines[i].lastIndexOf("(Sub") == -1) {
+
+                    lines[i] = lines[i] + " " + lines[i + 1];
+
                     lines[i + 1] = "";
-                    linesLength = lines[i].length(); // update line length
+
                 }
 
                 if (lines[i].contains("(Sub to")) {
                     lines[i] = lines[i].substring(0, lines[i].lastIndexOf("(Sub"));
-                    linesLength = lines[i].length();
+
                 }
+                if (regExIndex("^((?!unit[a-z]|Unit[a-z]).)*", lines[i], 0)[0] == -1) {
+
+                    lines[i] = lines[i].replace("Unit", "Suite");
+                    lines[i] = lines[i].replace("unit", "Suite");
+
+                }
+
+                lines[i] = lines[i].replace("Suites", "Suite");
+                lines[i] = lines[i].replace("Suite No.", "Suite");
+                lines[i] = lines[i].replace("*CSM*", "");
+                linesLength = lines[i].length();
                 numbersTemp = lines[i].substring(0, charactersToSeparate).trim();
                 addressesTemp = lines[i].substring(charactersToSeparate, linesLength).trim();
                 finalAddresses.add(addressesTemp);
