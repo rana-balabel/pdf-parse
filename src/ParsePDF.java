@@ -254,11 +254,13 @@ public class ParsePDF {
                 // once all arrays return correctly, pass the addressSep into this function to
                 // return, pass to CSV function to write into columns
                 for (int x = 0; x < splitByComma.length; x++) {
+
+                    splitByComma[x] = splitByComma[x].trim();
                     if (splitByComma[x].contains("Suite")) {
                         String[] streetTemp = splitByComma[x].split("Suite");
                         if (streetTemp.length > 1) {
                             int[] startEndIndex = regExIndex(
-                                    "[0-9]{1,4}\s*&\s*[0-9]{1,4}|[0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}[a-zA-Z]|[a-zA-Z][a-zA-Z]-[0-9]{1,4}|[a-zA-Z][a-zA-Z][0-9]{1,4}|[a-zA-Z]-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}|[0-9][a-zA-Z]|[a-zA-Z]|[0-9]{1,4}",
+                                    "[a-zA-Z]-[0-9]{1,4}|[0-9]{1,4}\s*&\s*[0-9]{1,4}|[0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}[a-zA-Z]|[a-zA-Z][a-zA-Z]-[0-9]{1,4}|[a-zA-Z][a-zA-Z][0-9]{1,4}|[a-zA-Z]-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}|[0-9][a-zA-Z]|[a-zA-Z]|[0-9]{1,4}",
                                     streetTemp[1], 0);// find location of
                             // suite number
                             finalParsedAddress[0] = "Suite "
@@ -271,6 +273,36 @@ public class ParsePDF {
                                 finalParsedAddress[1] += streetTemp[0] + ", ";
                             }
                             isSuite = true;
+                        }
+                    } else if (splitByComma[x].contains("Unit") &&
+                            regExIndex("Units\s*[A-Z][a-zA-z]", splitByComma[x], 0)[0] == -1 &&
+                            regExIndex("Unite\s*[A-Z][a-zA-z]", splitByComma[x], 0)[0] == -1 &&
+                            regExIndex("Unit\s*[A-Z][a-zA-z]", splitByComma[x], 0)[0] == -1
+
+                    ) {
+                        splitByComma[x] = splitByComma[x].replace("Units", "Unit");
+                        splitByComma[x] = splitByComma[x].replace("Unite", "Unit");
+                        String[] streetTemp = splitByComma[x].split("Unit");
+                        if (streetTemp.length > 1) {
+                            int[] startEndIndex = regExIndex(
+                                    "[a-zA-Z]-[0-9]{1,4}|[0-9]{1,4}\s*&\s*[0-9]{1,4}|[0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}[a-zA-Z]|[a-zA-Z][a-zA-Z]-[0-9]{1,4}|[a-zA-Z][a-zA-Z][0-9]{1,4}|[a-zA-Z]-[0-9]{1,4}|[a-zA-Z][0-9]{1,4}|[0-9][a-zA-Z]|[A-Z]|[0-9]{1,4}",
+                                    streetTemp[1], 0);// find location of
+                            // suite number
+                            if (startEndIndex[0] != -1) {
+                                finalParsedAddress[0] = "Unit "
+                                        + streetTemp[1].substring(startEndIndex[0], startEndIndex[1]).toUpperCase();
+                                if (streetTemp[0] == "") {
+                                    finalParsedAddress[1] += streetTemp[1].substring(startEndIndex[1],
+                                            streetTemp[1].length())
+                                            + ", ";
+                                } else {
+                                    finalParsedAddress[1] += streetTemp[0] + ", ";
+                                }
+                                isSuite = true;
+                            } else {
+
+                                isSuite = false;
+                            }
                         }
                     } else {
                         isSuite = false;
@@ -285,16 +317,17 @@ public class ParsePDF {
                     // if all else fails, then it is a street
                     if (!isCity && !isSuite) {
                         finalParsedAddress[1] += splitByComma[x] + ", ";
-                        // remove tail comma from street
                     }
 
                     isCity = false;
                     isSuite = false;
                 }
+                // remove tail comma from street
                 if (finalParsedAddress[1].length() > 2) {
                     finalParsedAddress[1] = finalParsedAddress[1].substring(0,
                             finalParsedAddress[1].length() - 2);
                 }
+
             } else {
                 finalParsedAddress[2] = unsepAddress; // address is less than 10 characters. assume it to be just the
                                                       // city
@@ -316,6 +349,26 @@ public class ParsePDF {
                 finalParsedAddress[1] = finalParsedAddress[1].substring(0,
                         finalParsedAddress[1].length() - 2);
             }
+        }
+
+        for (int cleaning = 0; cleaning < finalParsedAddress.length; cleaning++) {
+            finalParsedAddress[cleaning] = finalParsedAddress[cleaning].trim();
+            if (finalParsedAddress[cleaning] != "") {
+                if (finalParsedAddress[cleaning].charAt(0) == '#') {
+                    finalParsedAddress[cleaning] = finalParsedAddress[cleaning].replaceFirst("#", "Unit ");
+                }
+                if (finalParsedAddress[cleaning].charAt(0) == ',') {
+                    finalParsedAddress[cleaning] = finalParsedAddress[cleaning].replaceFirst(",", "");
+                }
+                if (finalParsedAddress[cleaning].charAt(finalParsedAddress[cleaning].length() - 1) == '-') {
+                    finalParsedAddress[cleaning] = finalParsedAddress[cleaning].substring(0,
+                            finalParsedAddress[cleaning].lastIndexOf("-") - 1);
+                }
+                if (finalParsedAddress[cleaning].charAt(0) == '-') {
+                    finalParsedAddress[cleaning] = finalParsedAddress[cleaning].replaceFirst("-", "Unit ");
+                }
+            } else
+                continue;
         }
         return finalParsedAddress;
     }
@@ -361,16 +414,10 @@ public class ParsePDF {
                     lines[i] = lines[i].substring(0, lines[i].lastIndexOf("(Sub"));
 
                 }
-                if (regExIndex("^((?!unit[a-z]|Unit[a-z]).)*", lines[i], 0)[0] == -1) {
-
-                    lines[i] = lines[i].replace("Unit", "Suite");
-                    lines[i] = lines[i].replace("unit", "Suite");
-
-                }
 
                 lines[i] = lines[i].replace("Suites", "Suite");
                 lines[i] = lines[i].replace("Suite No.", "Suite");
-                lines[i] = lines[i].replace("*CSM*", "");
+                lines[i] = lines[i].replace("*Csm*", "");
                 linesLength = lines[i].length();
                 numbersTemp = lines[i].substring(0, charactersToSeparate).trim();
                 addressesTemp = lines[i].substring(charactersToSeparate, linesLength).trim();
