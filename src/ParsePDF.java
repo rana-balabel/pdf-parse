@@ -411,6 +411,9 @@ public class ParsePDF {
                 if (finalParsedAddress[cleaning].contains("*csm*")) {
                     finalParsedAddress[cleaning] = finalParsedAddress[cleaning].replace("*csm*", "");
                 }
+                if (finalParsedAddress[cleaning].contains("(mb)")) {
+                    finalParsedAddress[cleaning] = finalParsedAddress[cleaning].replace("(mb)", "");
+                }
                 if (finalParsedAddress[cleaning].charAt(0) == ',') {
                     finalParsedAddress[cleaning] = finalParsedAddress[cleaning].replaceFirst(",", "");
                 }
