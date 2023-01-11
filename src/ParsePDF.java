@@ -1,6 +1,6 @@
 /*
  * Rana Balabel
- * input file is a 246 page pdf of institutions and their MICR, routing number, and branch address
+ * input file is a 389 page pdf of institutions and their MICR, routing number, and branch address
  * this class will take the text from the pdf using PDFBox. logic is used to break down the text to rows of data.
  * data is then written to a CSV for company use
  * 
